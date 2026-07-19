@@ -108,7 +108,8 @@ $sql .= " FROM ".MAIN_DB_PREFIX."societe as s";
 if (getDolGlobalString('COMPANY_SHOW_ADDRESS_SELECTLIST')) {
 	$sql .= " LEFT JOIN ".MAIN_DB_PREFIX."c_country as dictp ON dictp.rowid = s.fk_pays";
 }
-$sql .= " WHERE s.entity IN (".getEntity('societe').")";
+// Filter on active third parties only (status = 1) Closed third parties must not be selectable
+$sql .= " WHERE s.entity IN (".getEntity('societe').")  AND s.status = 1";
 if ($socid) {
 	$sql .= " AND (";
 	// Add criteria on name/code
@@ -127,6 +128,10 @@ if ($socid) {
 		$sql .= " OR s.rowid = ".((int) $socid);
 	}
 	$sql .= ")";
+}
+// user right to see all companies
+if (!$user->hasRight('societe', 'client', 'voir') && !$user->socid) {
+	$sql .= " AND EXISTS (SELECT sc.fk_soc FROM ".MAIN_DB_PREFIX."societe_commerciaux as sc WHERE sc.fk_soc = s.rowid AND sc.fk_user = ".(int) $user->id .")";
 }
 // Protection for external user access
 if ($user->socid > 0) {

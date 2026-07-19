@@ -1,5 +1,6 @@
 <?php
 /* Copyright (C) 2024       Frédéric France         <frederic.france@free.fr>
+ * Copyright (C) 2025		MDW						<mdeweerd@users.noreply.github.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,11 +40,14 @@ require '../../main.inc.php';
  * @var Translate $langs
  *
  * @var string $dolibarr_main_prod
+ * @var string $dolibarr_main_test
  */
+
 // Security
-if ($dolibarr_main_prod) {
+if (!empty($dolibarr_main_prod) || empty($dolibarr_main_test)) {
 	accessforbidden('Access forbidden when $dolibarr_main_prod is set to 1');
 }
+
 $optioncss = GETPOST('optioncss', 'alpha');
 
 
@@ -201,7 +205,7 @@ $sortfield = 'aaa';
 $sortorder = 'ASC';
 $tasksarray = array(1, 2, 3); // To force having several lines
 $tagidfortablednd = 'tablelines3';
-if (!isset($moreforfilter)) {
+if (!isset($moreforfilter)) {  // @phan-suppress-current-line PhanPluginUndeclaredVariableIsset
 	$moreforfilter = '';
 }
 if (!empty($conf->use_javascript_ajax)) {
@@ -228,7 +232,7 @@ if ($socid) {
 if (isset($showbirthday) && $showbirthday) {
 	$nav .= '<input type="hidden" name="showbirthday" value="1">';
 }
-if (isset($pid) && $pid) {
+if (isset($pid) && $pid) { // @phan-suppress-current-line PhanPluginUndeclaredVariableIsset
 	$nav .= '<input type="hidden" name="projectid" value="'.$pid.'">';
 }
 if ($type) {

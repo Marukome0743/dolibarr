@@ -1,9 +1,10 @@
 <?php
-/* Copyright (C) 2011       Laurent Destailleur <eldy@users.sourceforge.net>
- * Copyright (C) 2016       Raphaël Doursenaud  <rdoursenaud@gpcsolutions.fr>
- * Copyright (C) 2020		Ahmad Jamaly Rabib	<rabib@metroworks.co.jp>
- * Copyright (C) 2021-2024  Frédéric France		<frederic.france@free.fr>
- * Copyright (C) 2024		MDW							<mdeweerd@users.noreply.github.com>
+/* Copyright (C) 2011		Laurent Destailleur		<eldy@users.sourceforge.net>
+ * Copyright (C) 2016		Raphaël Doursenaud		<rdoursenaud@gpcsolutions.fr>
+ * Copyright (C) 2020		Ahmad Jamaly Rabib		<rabib@metroworks.co.jp>
+ * Copyright (C) 2021-2024	Frédéric France			<frederic.france@free.fr>
+ * Copyright (C) 2024-2025	MDW						<mdeweerd@users.noreply.github.com>
+ * Copyright (C) 2026		Alexandre Spangaro		<alexandre@inovea-conseil.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -195,6 +196,11 @@ class Import
 
 			// Search module files
 			while (($file = readdir($handle)) !== false) {
+				// Ignore Module Builder backup files (*.php.back)
+				if (preg_match('/\.back$/i', $file)) {
+					continue;
+				}
+
 				if (!preg_match("/^(mod.*)\.class\.php/i", $file, $reg)) {
 					continue;
 				}
@@ -265,11 +271,11 @@ class Import
 						// Array of tables creator field to import (key=alias, value=creator field name)
 						$this->array_import_tables_creator[$i] = (isset($module->import_tables_creator_array[$r]) ? $module->import_tables_creator_array[$r] : '');
 						// Array of fields to import (key=field, value=label)
-						$this->array_import_fields[$i] = $module->import_fields_array[$r];
+						$this->array_import_fields[$i] = (isset($module->import_fields_array[$r]) ? $module->import_fields_array[$r] : []);
 						// Array of hidden fields to import (key=field, value=label)
 						$this->array_import_fieldshidden[$i] = (isset($module->import_fieldshidden_array[$r]) ? $module->import_fieldshidden_array[$r] : '');
 						// Array of entities to export (key=field, value=entity)
-						$this->array_import_entities[$i] = $module->import_entities_array[$r];
+						$this->array_import_entities[$i] = (isset($module->import_entities_array[$r]) ? $module->import_entities_array[$r] : '');
 						// Array of aliases to export (key=field, value=alias)
 						$this->array_import_regex[$i] = (isset($module->import_regex_array[$r]) ? $module->import_regex_array[$r] : '');
 						// Array of columns allowed as UPDATE options
@@ -303,11 +309,11 @@ class Import
 	 *  Build an import example file.
 	 *  Arrays this->array_export_xxx are already loaded for required datatoexport
 	 *
-	 *  @param      string	$model              Name of import engine ('csv', ...)
-	 *  @param      string	$headerlinefields   Array of values for first line of example file
-	 *  @param      string	$contentlinevalues	Array of values for content line of example file
-	 *  @param		string	$datatoimport		Dataset to import
-	 *  @return		string						Return integer <0 if KO, >0 if OK
+	 *  @param      string		$model              Name of import engine ('csv', ...)
+	 *  @param      string[]	$headerlinefields   Array of values for first line of example file
+	 *  @param      string[]	$contentlinevalues	Array of values for content line of example file
+	 *  @param		string		$datatoimport		Dataset to import
+	 *  @return		string							Return integer <0 if KO, >0 if OK
 	 */
 	public function build_example_file($model, $headerlinefields, $contentlinevalues, $datatoimport)
 	{
@@ -324,7 +330,7 @@ class Import
 		$classname = "Import".$model;
 		require_once $dir.$file;
 		$objmodel = new $classname($this->db, $datatoimport);
-		'@phan-var-force CommonObject $objmodel';
+		'@phan-var-force ModeleImports $objmodel';
 
 		$outputlangs = $langs; // Lang for output
 		$s = '';
@@ -352,8 +358,6 @@ class Import
 	 */
 	public function create($user)
 	{
-		global $conf;
-
 		dol_syslog("Import.class.php::create");
 
 		// Check parameters

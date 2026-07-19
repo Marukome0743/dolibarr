@@ -4,8 +4,8 @@
  * Copyright (C) 2014		Regis Houssin		<regis.houssin@inodbox.com>
  * Copyright (C) 2016		Juanjo Menent		<jmenent@2byte.es>
  * Copyright (C) 2016		ATM Consulting		<support@atm-consulting.fr>
- * Copyright (C) 2019-2024  Frédéric France     <frederic.france@free.fr>
- * Copyright (C) 2024		MDW					<mdeweerd@users.noreply.github.com>
+ * Copyright (C) 2019-2025  Frédéric France     <frederic.france@free.fr>
+ * Copyright (C) 2024-2025	MDW					<mdeweerd@users.noreply.github.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,14 +29,6 @@
 
 // Load Dolibarr environment
 require '../../main.inc.php';
-require_once DOL_DOCUMENT_ROOT.'/product/class/product.class.php';
-require_once DOL_DOCUMENT_ROOT.'/product/stock/class/entrepot.class.php';
-require_once DOL_DOCUMENT_ROOT.'/core/class/html.formother.class.php';
-require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
-require_once DOL_DOCUMENT_ROOT.'/fourn/class/fournisseur.commande.class.php';
-require_once DOL_DOCUMENT_ROOT.'/product/class/html.formproduct.class.php';
-require_once './lib/replenishment.lib.php';
-
 /**
  * @var Conf $conf
  * @var DoliDB $db
@@ -44,6 +36,13 @@ require_once './lib/replenishment.lib.php';
  * @var Translate $langs
  * @var User $user
  */
+require_once DOL_DOCUMENT_ROOT.'/product/class/product.class.php';
+require_once DOL_DOCUMENT_ROOT.'/product/stock/class/entrepot.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/class/html.formother.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
+require_once DOL_DOCUMENT_ROOT.'/fourn/class/fournisseur.commande.class.php';
+require_once DOL_DOCUMENT_ROOT.'/product/class/html.formproduct.class.php';
+require_once './lib/replenishment.lib.php';
 
 // Load translation files required by the page
 $langs->loadLangs(array('products', 'stocks', 'orders'));
@@ -103,11 +102,15 @@ if (!$sortorder) {
 	$sortorder = 'ASC';
 }
 
-$parameters = array();
-$reshook = $hookmanager->executeHooks('doActions', $parameters, $object, $action); // Note that $action and $object may have been modified by some hooks
-if ($reshook < 0) {
-	setEventMessages($hookmanager->error, $hookmanager->errors, 'errors');
+$object = new Entrepot($db);
+
+// Security check
+if ($user->socid) {
+	$socid = $user->socid;
 }
+
+$result = restrictedArea($user, 'produit|service');	// Must have permission to read product
+$result = restrictedArea($user, 'stock');	// Must have permission to read stock
 
 $dateIsValid = true;
 if ($mode == 'future') {
@@ -122,18 +125,16 @@ if ($mode == 'future') {
 	}
 }
 
-// Security check
-if ($user->socid) {
-	$socid = $user->socid;
-}
-
-$result = restrictedArea($user, 'produit|service');	// Must have permission to read product
-$result = restrictedArea($user, 'stock');	// Must have permission to read stock
-
 
 /*
  * Actions
  */
+
+$parameters = array();
+$reshook = $hookmanager->executeHooks('doActions', $parameters, $object, $action); // Note that $action and $object may have been modified by some hooks
+if ($reshook < 0) {
+	setEventMessages($hookmanager->error, $hookmanager->errors, 'errors');
+}
 
 if (GETPOST('button_removefilter_x', 'alpha') || GETPOST('button_removefilter.x', 'alpha') || GETPOST('button_removefilter', 'alpha')) { // Both test are required to be compatible with all browsers
 	$date = '';
@@ -299,6 +300,8 @@ $parameters = array();
 $reshook = $hookmanager->executeHooks('printFieldListSelect', $parameters, $object, $action); // Note that $action and $object may have been modified by hook
 $sql .= $hookmanager->resPrint;
 
+$sqlfields = $sql;
+
 $sql .= ' FROM '.MAIN_DB_PREFIX.'product as p';
 if (!empty($search_fk_warehouse)) {
 	$sql .= ' LEFT JOIN '.MAIN_DB_PREFIX.'product_stock as ps ON p.rowid = ps.fk_product AND ps.fk_entrepot IN ('.$db->sanitize(implode(",", $search_fk_warehouse)).")";
@@ -313,9 +316,6 @@ if ($productid > 0) {
 }
 if (!getDolGlobalString('STOCK_SUPPORTS_SERVICES')) {
 	$sql .= " AND p.fk_product_type = 0";
-}
-if (!empty($canvas)) {
-	$sql .= " AND p.canvas = '".$db->escape($canvas)."'";
 }
 if ($search_ref) {
 	$sql .= natural_search('p.ref', $search_ref);
@@ -354,25 +354,36 @@ if ($sortfield == 'stock' && !empty($search_fk_warehouse)) {
 }
 $sql .= $db->order($sortfield, $sortorder);
 
+// Count total nb of records
 $nbtotalofrecords = '';
 if ($date && $dateIsValid) {	// We avoid a heavy sql if mandatory parameter date not yet defined
 	if (!getDolGlobalInt('MAIN_DISABLE_FULL_SCANLIST')) {
-		$result = $db->query($sql);
-		$nbtotalofrecords = $db->num_rows($result);
-		if (($page * $limit) > $nbtotalofrecords || $ext == 'csv') {	// if total resultset is smaller then paging size (filtering), goto and load page 0
+		/* The fast and low memory method to get and count full list converts the sql into a sql count */
+		$sqlforcount = preg_replace('/^'.preg_quote($sqlfields, '/').'/', 'SELECT COUNT(*) as nbtotalofrecords', $sql);
+		$sqlforcount = preg_replace('/GROUP BY .*$/', '', $sqlforcount);
+
+		$resql = $db->query($sqlforcount);
+		if ($resql) {
+			$objforcount = $db->fetch_object($resql);
+			$nbtotalofrecords = $objforcount->nbtotalofrecords;
+		} else {
+			dol_print_error($db);
+		}
+
+		if (($page * $limit) > (int) $nbtotalofrecords || $ext == 'csv') {	// if total resultset is smaller than the paging size (filtering), goto and load page 0
 			$page = 0;
 			$offset = 0;
 		}
+		$db->free($resql);
 	}
 
 	//print $sql;
 	if ($ext != 'csv') {
 		$sql .= $db->plimit($limit + 1, $offset);
-		$resql = $db->query($sql);
 	} else {
-		$resql = $result;
 		$limit = 0;
 	}
+	$resql = $db->query($sql);
 	if (empty($resql)) {
 		dol_print_error($db);
 		exit;
@@ -426,7 +437,7 @@ if ($ext == 'csv') {
 	print '<span class="opacitymedium">'.$desc.'</span><br>'."\n";
 	print '<br>'."\n";
 
-	print '<form name="formFilterWarehouse" method="POST" action="'.$_SERVER["PHP_SELF"].'">';
+	print '<form name="formFilterWarehouse" method="POST" action="'.dolBuildUrl($_SERVER["PHP_SELF"]).'">';
 	print '<input type="hidden" name="token" value="'.newToken().'">';
 	print '<input type="hidden" name="action" value="filter">';
 	print '<input type="hidden" name="mode" value="'.$mode.'">';
@@ -560,25 +571,25 @@ if ($ext == 'csv') {
 	print '<tr class="liste_titre">';
 	// Action column
 	if (getDolGlobalString('MAIN_CHECKBOX_LEFT_COLUMN')) {
-		print_liste_field_titre('', $_SERVER["PHP_SELF"], '', $param, '', '', $sortfield, $sortorder, 'left ');
+		print_liste_field_titre('', $_SERVER["PHP_SELF"], '', '', $param, '', $sortfield, $sortorder, 'left ');
 	}
-	print_liste_field_titre('ProductRef', $_SERVER["PHP_SELF"], 'p.ref', $param, '', '', $sortfield, $sortorder);
-	print_liste_field_titre('Label', $_SERVER["PHP_SELF"], 'p.label', $param, '', '', $sortfield, $sortorder);
+	print_liste_field_titre('ProductRef', $_SERVER["PHP_SELF"], 'p.ref', '', $param, '', $sortfield, $sortorder);
+	print_liste_field_titre('Label', $_SERVER["PHP_SELF"], 'p.label', '', $param, '', $sortfield, $sortorder);
 
 	if ($mode == 'future') {
-		print_liste_field_titre('CurrentStock', $_SERVER["PHP_SELF"], $fieldtosortcurrentstock, $param, '', '', $sortfield, $sortorder, 'right ');
+		print_liste_field_titre('CurrentStock', $_SERVER["PHP_SELF"], $fieldtosortcurrentstock, '', $param, '', $sortfield, $sortorder, 'right ');
 		print_liste_field_titre('', $_SERVER["PHP_SELF"]);
-		print_liste_field_titre($stocklabel, $_SERVER["PHP_SELF"], '', $param, '', '', $sortfield, $sortorder, 'right ', 'VirtualStockAtDateDesc');
-		print_liste_field_titre('VirtualStock', $_SERVER["PHP_SELF"], '', $param, '', '', $sortfield, $sortorder, 'right ', 'VirtualStockDesc');
+		print_liste_field_titre($stocklabel, $_SERVER["PHP_SELF"], '', '', $param, '', $sortfield, $sortorder, 'right ', 'VirtualStockAtDateDesc');
+		print_liste_field_titre('VirtualStock', $_SERVER["PHP_SELF"], '', '', $param, '', $sortfield, $sortorder, 'right ', 'VirtualStockDesc');
 	} else {
-		print_liste_field_titre($stocklabel, $_SERVER["PHP_SELF"], '', $param, '', '', $sortfield, $sortorder, 'right ');
+		print_liste_field_titre($stocklabel, $_SERVER["PHP_SELF"], '', '', $param, '', $sortfield, $sortorder, 'right ');
 		$tooltiptext = $langs->trans("QtyAtDate").' x '.$langs->trans("AverageUnitPricePMPShort").' ('.$langs->trans("Currently").')';
 		print_liste_field_titre("EstimatedStockValue", $_SERVER["PHP_SELF"], "currentvalue", '', $param, '', $sortfield, $sortorder, 'right ', $tooltiptext, 1);
 		$tooltiptext = $langs->trans("QtyAtDate").' x '.$langs->trans("SellingPrice").' ('.$langs->trans("Currently").')';
 		print_liste_field_titre("EstimatedStockValueSell", $_SERVER["PHP_SELF"], "", '', $param, '', $sortfield, $sortorder, 'right ', $tooltiptext, 1);
 		$tooltiptext = $langs->trans("MovementsSinceDate");
 		print_liste_field_titre('', $_SERVER["PHP_SELF"], '', '', $param, '', '', '', 'right ', $tooltiptext, 1);
-		print_liste_field_titre('CurrentStock', $_SERVER["PHP_SELF"], $fieldtosortcurrentstock, $param, '', '', $sortfield, $sortorder, 'right ');
+		print_liste_field_titre('CurrentStock', $_SERVER["PHP_SELF"], $fieldtosortcurrentstock, '', $param, '', $sortfield, $sortorder, 'right ');
 	}
 
 	// Hook fields
@@ -588,7 +599,7 @@ if ($ext == 'csv') {
 
 	// Action column
 	if (!getDolGlobalString('MAIN_CHECKBOX_LEFT_COLUMN')) {
-		print_liste_field_titre('', $_SERVER["PHP_SELF"], '', $param, '', '', $sortfield, $sortorder, 'right ');
+		print_liste_field_titre('', $_SERVER["PHP_SELF"], '', '', $param, '', $sortfield, $sortorder, 'right ');
 	}
 
 	print "</tr>\n";
@@ -601,6 +612,10 @@ $totalvirtualstock = 0;
 
 $i = 0;
 while ($i < ($limit ? min($num, $limit) : $num)) {
+	if (empty($resql)) {
+		break;
+	}
+
 	$objp = $db->fetch_object($resql);
 
 	if (getDolGlobalString('STOCK_SUPPORTS_SERVICES') || $objp->fk_product_type == 0) {
@@ -644,6 +659,8 @@ while ($i < ($limit ? min($num, $limit) : $num)) {
 			//}
 		}
 
+		$nbofmovement = 0;
+		$virtualstock = 0;
 		if ($mode == 'future') {
 			$prod->load_stock('warehouseopen,warehouseinternal,nobatch', 0, $dateendofday);
 			$stock = $prod->stock_theorique;		// virtual stock at a date
@@ -651,7 +668,6 @@ while ($i < ($limit ? min($num, $limit) : $num)) {
 			$virtualstock = $prod->stock_theorique;	// virtual stock in infinite future
 		} else {
 			$stock = $currentstock;
-			$nbofmovement = 0;
 			if (!empty($search_fk_warehouse)) {
 				foreach ($search_fk_warehouse as $val) {
 					$stock -= empty($movements_prod_warehouse[$objp->rowid][$val]) ? 0 : $movements_prod_warehouse[$objp->rowid][$val];
@@ -679,7 +695,7 @@ while ($i < ($limit ? min($num, $limit) : $num)) {
 					'"'.$objp->label.'"',
 					'"'.price(price2num($stock, 'MS')).'"',
 					price2num($stock * $objp->pmp, 'MT') ? '"'.price2num($stock * $objp->pmp, 'MT').'"' : '',
-					!getDolGlobalString('PRODUIT_MULTIPRICES') ? '"'.price2num($stock * $objp->price, 'MT').'"' : '"'.$langs->trans("Variable").'('.$langs->trans("OptionMULTIPRICESIsOn").')"',
+					(!getDolGlobalString('PRODUIT_MULTIPRICES') && !getDolGlobalString('PRODUIT_CUSTOMER_PRICES_AND_MULTIPRICES')) ? '"'.price2num($stock * $objp->price, 'MT').'"' : '"'.$langs->trans("Variable").'('.$langs->trans("OptionMULTIPRICESIsOn").')"',
 					"$nbofmovement",
 					'"'.price2num($currentstock, 'MS').'"'))."\r\n";
 				$totalbuyingprice += $stock * $objp->pmp;
@@ -732,11 +748,11 @@ while ($i < ($limit ? min($num, $limit) : $num)) {
 
 				// Selling value
 				print '<td class="right"';
-				if (!getDolGlobalString('PRODUIT_MULTIPRICES')) {
+				if (!getDolGlobalString('PRODUIT_MULTIPRICES') && !getDolGlobalString('PRODUIT_CUSTOMER_PRICES_AND_MULTIPRICES')) {
 					print ' title="'.dolPrintHTMLForAttribute($langs->trans("SellingPrice").' ('.$langs->trans("Currently").'): '.price(price2num($objp->price, 'MU'), 1));
 				}
 				print '">';
-				if (!getDolGlobalString('PRODUIT_MULTIPRICES')) {
+				if (!getDolGlobalString('PRODUIT_MULTIPRICES') && !getDolGlobalString('PRODUIT_CUSTOMER_PRICES_AND_MULTIPRICES')) {
 					print '<span class="amount">';
 					if ($stock || (float) ($stock * $objp->price)) {
 						print price(price2num($stock * $objp->price, 'MT'), 1);
@@ -822,7 +838,7 @@ if ($ext == 'csv') {
 		'',
 		'',
 		'"'.price2num($totalbuyingprice, 'MT').'"',
-		!getDolGlobalString('PRODUIT_MULTIPRICES') ? '"'.price2num($totalsellingprice, 'MT').'"' : '',
+			(!getDolGlobalString('PRODUIT_MULTIPRICES') && !getDolGlobalString('PRODUIT_CUSTOMER_PRICES_AND_MULTIPRICES')) ? '"'.price2num($totalsellingprice, 'MT').'"' : '',
 		'',
 		$productid > 0 ? price2num($totalcurrentstock, 'MS') : '')
 	);
@@ -841,7 +857,7 @@ if ($ext == 'csv') {
 		} else {
 			print '<td></td>';
 			print '<td class="right">'.price(price2num($totalbuyingprice, 'MT')).'</td>';
-			if (!getDolGlobalString('PRODUIT_MULTIPRICES')) {
+			if (!getDolGlobalString('PRODUIT_MULTIPRICES') && !getDolGlobalString('PRODUIT_CUSTOMER_PRICES_AND_MULTIPRICES')) {
 				print '<td class="right">'.price(price2num($totalsellingprice, 'MT')).'</td>';
 			} else {
 				print '<td></td>';

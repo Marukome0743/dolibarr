@@ -1,8 +1,9 @@
 <?php
+
 /* Copyright (C) 2011-2022	Regis Houssin			<regis.houssin@inodbox.com>
  * Copyright (C) 2011-2023	Laurent Destailleur		<eldy@users.sourceforge.net>
  * Copyright (C) 2024		Frédéric France			<frederic.france@free.fr>
- * Copyright (C) 2024		MDW						<mdeweerd@users.noreply.github.com>
+ * Copyright (C) 2024-2025	MDW						<mdeweerd@users.noreply.github.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,6 +73,7 @@ class FileUpload
 		$pathname = str_replace('/class', '', $element_prop['classpath']);
 		$filename = dol_sanitizeFileName($element_prop['classfile']);
 		$dir_output = dol_sanitizePathName($element_prop['dir_output']);
+		$savingDocMask = '';
 
 		//print 'fileupload.class.php: element='.$element.' pathname='.$pathname.' filename='.$filename.' dir_output='.$dir_output."\n";
 
@@ -87,6 +89,11 @@ class FileUpload
 			$object = fetchObjectByElement($fk_element, $element);
 
 			$object_ref = dol_sanitizeFileName($object->ref);
+
+			// add object reference as file name prefix if const MAIN_DISABLE_SUGGEST_REF_AS_PREFIX is not enabled
+			if (!getDolGlobalInt('MAIN_DISABLE_SUGGEST_REF_AS_PREFIX')) {
+				$savingDocMask = $object_ref.'-__file__';
+			}
 
 			// Special cases to forge $object_ref used to forge $upload_dir
 			if ($element == 'invoice_supplier') {
@@ -113,6 +120,7 @@ class FileUpload
 			'script_url' => $_SERVER['PHP_SELF'],
 			'upload_dir' => $dir_output.'/'.$object_ref.'/',
 			'upload_url' => DOL_URL_ROOT.'/document.php?modulepart='.$element.'&attachment=1&file=/'.$object_ref.'/',
+			'saving_doc_mask' => $savingDocMask,
 			'param_name' => 'files',
 			// Set the following option to 'POST', if your server does not support
 			// DELETE requests. This is a parameter sent to the client:
@@ -161,7 +169,7 @@ class FileUpload
 				'options' => &$options,
 				'element' => $element
 			),
-			$object,
+			$object,  // @phan-suppress-current-line PhanTypeMismatchArgumentNullable
 			$action
 		);
 
@@ -419,6 +427,7 @@ class FileUpload
 	 * @param 	string		$error				Error
 	 * @param	string		$index				Index
 	 * @return stdClass|null
+	 * @see dol_add_file_process()
 	 */
 	protected function handleFileUpload($uploaded_file, $name, $size, $type, $error, $index)
 	{
@@ -430,13 +439,21 @@ class FileUpload
 
 		// Sanitize to avoid stream execution when calling file_size(). Not that this is a second security because
 		// most streams are already disabled by stream_wrapper_unregister() in filefunc.inc.php
-		$uploaded_file = preg_replace('/\s*(http|ftp)s?:/i', '', $uploaded_file);
+		$uploaded_file = preg_replace('/\s*(http|ftp|sftp|)s?:/i', '', $uploaded_file);
 		$uploaded_file = realpath($uploaded_file);	// A hack to be sure the file point to an existing file on disk (and is not a SSRF attack)
 
 		$validate = $this->validate($uploaded_file, $file, $error, $index);
 
 		if ($validate) {
 			if (dol_mkdir($this->options['upload_dir']) >= 0) {
+				// add object reference as file name prefix if const MAIN_DISABLE_SUGGEST_REF_AS_PREFIX is not enabled
+				$fileNameWithoutExt = preg_replace('/\.[^\.]+$/', '', $file->name);
+				$savingDocMask = $this->options['saving_doc_mask'];
+				if ($savingDocMask && strpos($savingDocMask, $fileNameWithoutExt) !== 0) {
+					$fileNameWithPrefix = preg_replace('/__file__/', $file->name, $savingDocMask);
+					$file->name = $fileNameWithPrefix;
+				}
+
 				$file_path = dol_sanitizePathName($this->options['upload_dir']).dol_sanitizeFileName($file->name);
 				$append_file = !$this->options['discard_aborted_uploads'] && dol_is_file($file_path) && $file->size > dol_filesize($file_path);
 
@@ -447,12 +464,15 @@ class FileUpload
 					if ($append_file) {
 						file_put_contents($file_path, fopen($uploaded_file, 'r'), FILE_APPEND);
 					} else {
+						// TODO Replace this with a call of dol_add_file_process(... $mode=1)
 						$result = dol_move_uploaded_file($uploaded_file, $file_path, 1, 0, 0, 0, 'userfile');
 					}
 				} else {
 					// Non-multipart uploads (PUT method support)
 					file_put_contents($file_path, fopen('php://input', 'r'), $append_file ? FILE_APPEND : 0);
 				}
+				dolChmod($file_path);
+
 				$file_size = dol_filesize($file_path);
 				if ($file_size === $file->size) {
 					$file->url = $this->options['upload_url'].urlencode($file->name);
@@ -522,7 +542,7 @@ class FileUpload
 					isset($_SERVER['HTTP_X_FILE_SIZE']) ? $_SERVER['HTTP_X_FILE_SIZE'] : $upload['size'][$index],
 					isset($_SERVER['HTTP_X_FILE_TYPE']) ? $_SERVER['HTTP_X_FILE_TYPE'] : $upload['type'][$index],
 					$upload['error'][$index],
-					$index
+					(string) $index
 				);
 				if (!empty($tmpres->error)) {
 					$error++;

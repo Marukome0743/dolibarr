@@ -1,8 +1,8 @@
 <?php
-/* Copyright (C) 2004-2023  Laurent Destailleur      <eldy@users.sourceforge.net>
- * Copyright (C) 2011-2024  Alexandre Spangaro       <aspangaro@easya.solutions>
- * Copyright (C) 2024       Frédéric France             <frederic.france@free.fr>
- * Copyright (C) 2024		MDW							<mdeweerd@users.noreply.github.com>
+/* Copyright (C) 2004-2023	Laurent Destailleur			<eldy@users.sourceforge.net>
+ * Copyright (C) 2011-2025	Alexandre Spangaro			<alexandre@inovea-conseil.com>
+ * Copyright (C) 2024-2025  Frédéric France				<frederic.france@free.fr>
+ * Copyright (C) 2024-2025	MDW							<mdeweerd@users.noreply.github.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -67,7 +67,7 @@ $actl[1] = img_picto($langs->trans("Activated"), 'switch_on', 'class="size15x"')
 $listoffset = GETPOST('listoffset', 'alpha');
 $listlimit = GETPOSTINT('listlimit') > 0 ? GETPOSTINT('listlimit') : 1000;
 
-$sortfield = GETPOST("sortfield", 'aZ09comma');
+$sortfield = (string) GETPOST("sortfield", 'aZ09comma');
 $sortorder = GETPOST("sortorder", 'aZ09comma');
 $page = GETPOSTISSET('pageplusone') ? (GETPOSTINT('pageplusone') - 1) : GETPOSTINT("page");
 if (empty($page) || $page < 0 || GETPOST('button_search', 'alpha') || GETPOST('button_removefilter', 'alpha')) {
@@ -465,9 +465,7 @@ $paramwithsearch = $param;
 if ($sortorder) {
 	$paramwithsearch .= '&sortorder='.urlencode($sortorder);
 }
-if ($sortfield) {
-	$paramwithsearch .= '&sortfield='.urlencode($sortfield);
-}
+$paramwithsearch .= '&sortfield='.urlencode($sortfield);
 if (GETPOST('from', 'alpha')) {
 	$paramwithsearch .= '&from='.urlencode(GETPOST('from', 'alpha'));
 }
@@ -477,7 +475,7 @@ if ($listlimit) {
 print '<form action="'.$_SERVER['PHP_SELF'].'?id='.$id.'" method="POST">';
 print '<input type="hidden" name="token" value="'.newToken().'">';
 print '<input type="hidden" name="from" value="'.dol_escape_htmltag(GETPOST('from', 'alpha')).'">';
-print '<input type="hidden" name="sortfield" value="'.dol_escape_htmltag($sortfield).'">';
+print '<input type="hidden" name="sortfield" value="'.dol_escape_htmltag((string) $sortfield).'">';
 print '<input type="hidden" name="sortorder" value="'.dol_escape_htmltag($sortorder).'">';
 
 
@@ -825,9 +823,7 @@ if ($resql) {
 					}
 				}
 				$url = $_SERVER["PHP_SELF"].'?'.($page ? 'page='.$page.'&' : '').'sortfield='.$sortfield.'&sortorder='.$sortorder.'&rowid='.(!empty($obj->rowid) ? $obj->rowid : (!empty($obj->code) ? $obj->code : '')).'&code='.(!empty($obj->code) ? urlencode($obj->code) : '');
-				if ($param) {
-					$url .= '&'.$param;
-				}
+				$url .= '&'.$param;
 				$url .= '&';
 
 				$canbemodified = $iserasable;
@@ -909,7 +905,6 @@ if ($resql) {
 				print '<td class="center" class="nowrap">';
 				if ($canbedisabled) {
 					print '<a class="reposition" href="'.$url.'action='.urlencode($acts[$obj->active]).'&token='.newToken().'">'.$actl[$obj->active].'</a>';
-					print '<a class="reposition" href="'.$url.'action='.$acts[$obj->active].'&token='.newToken().'">'.$actl[$obj->active].'</a>';
 				} else {
 					print $langs->trans("AlwaysActive");
 				}

@@ -1,10 +1,11 @@
 <?php
-/* Copyright (C) 2006-2012	Laurent Destailleur	<eldy@users.sourceforge.net>
- * Copyright (C) 2009-2012	Regis Houssin		<regis.houssin@inodbox.com>
- * Copyright (C) 2012      Christophe Battarel  <christophe.battarel@altairis.fr>
- * Copyright (C) 2012-2016 Juanjo Menent		<jmenent@2byte.es>
+/* Copyright (C) 2006-2012	Laurent Destailleur         <eldy@users.sourceforge.net>
+ * Copyright (C) 2009-2012	Regis Houssin               <regis.houssin@inodbox.com>
+ * Copyright (C) 2012       Christophe Battarel         <christophe.battarel@altairis.fr>
+ * Copyright (C) 2012-2016  Juanjo Menent               <jmenent@2byte.es>
  * Copyright (C) 2024       Frédéric France             <frederic.france@free.fr>
- * Copyright (C) 2024		MDW							<mdeweerd@users.noreply.github.com>
+ * Copyright (C) 2024       MDW                         <mdeweerd@users.noreply.github.com>
+ * Copyright (C) 2026       Alexandre Spangaro          <alexandre@inovea-conseil.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -444,7 +445,7 @@ class ImportCsv extends ModeleImports
 										$file = (empty($objimport->array_import_convertvalue[0][$val]['classfile']) ? $objimport->array_import_convertvalue[0][$val]['file'] : $objimport->array_import_convertvalue[0][$val]['classfile']);
 										$class = $objimport->array_import_convertvalue[0][$val]['class'];
 										$method = $objimport->array_import_convertvalue[0][$val]['method'];
-										if ($this->cacheconvert[$file.'_'.$class.'_'.$method.'_'][$newval] != '') {
+										if (isset($this->cacheconvert[$file.'_'.$class.'_'.$method.'_'][$newval]) && $this->cacheconvert[$file.'_'.$class.'_'.$method.'_'][$newval] != $newval) {
 											$newval = $this->cacheconvert[$file.'_'.$class.'_'.$method.'_'][$newval];
 										} else {
 											$resultload = dol_include_once($file);
@@ -936,6 +937,7 @@ class ImportCsv extends ModeleImports
 									if ($num_rows == 1) {
 										$res = $this->db->fetch_object($resql);
 										$lastinsertid = $res->rowid;
+										$keyfield = 'rowid';
 										if ($is_table_category_link) {
 											$lastinsertid = 'linktable';
 										} // used to apply update on tables like llx_categorie_product and avoid being blocked for all file content if at least one entry already exists
@@ -960,10 +962,10 @@ class ImportCsv extends ModeleImports
 								// may already exists. So we rescan the extrafield table to know if record exists or not for the rowid.
 								// Note: For extrafield tablename, we have in importfieldshidden_array an entry 'extra.fk_object'=>'lastrowid-tableparent' so $keyfield is 'fk_object'
 								$sqlSelect = "SELECT rowid FROM ".$tablename;
-
 								if (empty($keyfield)) {
 									$keyfield = 'rowid';
 								}
+
 								$sqlSelect .= " WHERE ".$keyfield." = ".((int) $lastinsertid);
 
 								if (!empty($tablewithentity_cache[$tablename])) {
@@ -1005,10 +1007,10 @@ class ImportCsv extends ModeleImports
 									$set[] = $key." = ".$val;	// $val was escaped/sanitized previously
 								}
 								$sqlstart .= " SET ".implode(', ', $set).", import_key = '".$this->db->escape($importid)."'";
-
 								if (empty($keyfield)) {
 									$keyfield = 'rowid';
 								}
+
 								$sqlend = " WHERE ".$keyfield." = ".((int) $lastinsertid);
 
 								if ($is_table_category_link) {

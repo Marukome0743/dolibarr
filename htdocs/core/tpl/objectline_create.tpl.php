@@ -6,12 +6,14 @@
  * Copyright (C) 2014		Florian Henry		<florian.henry@open-concept.pro>
  * Copyright (C) 2014       Raphaël Doursenaud  <rdoursenaud@gpcsolutions.fr>
  * Copyright (C) 2015-2016	Marcos García		<marcosgdf@gmail.com>
- * Copyright (C) 2018-2024	Frédéric France     <frederic.france@free.fr>
+ * Copyright (C) 2018-2025  Frédéric France     <frederic.france@free.fr>
  * Copyright (C) 2018       Ferran Marcet       <fmarcet@2byte.es>
  * Copyright (C) 2019       Nicolas ZABOURI     <info@inovea-conseil.com>
  * Copyright (C) 2022       OpenDSI             <support@open-dsi.fr>
  * Copyright (C) 2022       Gauthier VERDOL     <gauthier.verdol@atm-consulting.fr>
  * Copyright (C) 2024       Alexandre Spangaro  <alexandre@inovea-conseil.com>
+ * Copyright (C) 2025		MDW					<mdeweerd@users.noreply.github.com>
+ * Copyright (C) 2025		Lenin Rivas			<lenin.rivas777@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,33 +27,44 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
- *
- * Need to have the following variables defined:
- * $object (invoice, order, ...)
- * $conf
- * $langs
- * $dateSelector
- * $forceall (0 by default, 1 for supplier invoices/orders)
- * $senderissupplier (0 by default, 1 or 2 for supplier invoices/orders)
- * $inputalsopricewithtax (0 by default, 1 to also show column with unit price including tax)
  */
+
 /**
- * @var CommonObject $this
+ * @var Conf $conf
+ * @var CommonObject|Facture $this
  * @var CommonObject $object
  * @var CommonObjectLine $line
+ * @var ExtraFields $extrafields
  * @var Form $form
  * @var HookManager $hookmanager
  * @var Translate $langs
  * @var User $user
+ * @var Societe $buyer
+ * @var Societe $seller
+ *
+ * @var string $action
+ * @var string $usehm
+ * @var int $dateSelector
+ * @var int $forceall (0 by default, 1 for supplier invoices/orders)
+ * @var int $senderissupplier (0 by default, 1 or 2 for supplier invoices/orders)
+ * @var int $inputalsopricewithtax (0 by default, 1 to also show column with unit price including tax)
  */
+
 // Protection to avoid direct call of template
 if (empty($object) || !is_object($object)) {
 	print "Error: this template page cannot be called directly as an URL";
 	exit;
 }
 
-'@phan-var-force CommonObject $this
- @phan-var-force CommonObject $object';
+'
+@phan-var-force CommonObject|Facture $this
+@phan-var-force CommonObject $object
+@phan-var-force CommonObjectLine $line
+@phan-var-force ExtraFields $extrafields
+@phan-var-force Societe $buyer
+@phan-var-force Societe $seller
+@phan-var-force int<0,1> $usehm
+';
 
 $usemargins = 0;
 if (isModEnabled('margin') && !empty($object->element) && in_array($object->element, array('facture', 'facturerec', 'propal', 'commande'))) {
@@ -79,7 +92,7 @@ if (empty($inputalsopricewithtax)) {
 }
 // Define colspan for the button 'Add'
 $colspan = 3; // Columns: total ht + col edit + col delete
-if (isModEnabled("multicurrency") && $this->multicurrency_code != $conf->currency) {
+if (isModEnabled("multicurrency") && $this->multicurrency_code && $this->multicurrency_code != $conf->currency) {
 	$colspan++; //Add column for Total (currency) if required
 }
 if (in_array($object->element, array('propal', 'commande', 'order', 'facture', 'facturerec', 'invoice', 'supplier_proposal', 'order_supplier', 'invoice_supplier', 'invoice_supplier_rec'))) {
@@ -132,11 +145,14 @@ if ($nolinesbefore) {
 		} ?>
 		<td class="linecolvat right"><span id="title_vat"><?php echo $langs->trans('VAT'); ?></span></td>
 		<td class="linecoluht right"><span id="title_up_ht"><?php echo $langs->trans('PriceUHT'); ?></span></td>
-		<?php if (isModEnabled("multicurrency") && $this->multicurrency_code != $conf->currency) { ?>
-			<td class="linecoluht_currency right"><span id="title_up_ht_currency"><?php echo $langs->trans('PriceUHTCurrency'); ?></span></td>
+		<?php if (isModEnabled("multicurrency") && $this->multicurrency_code && $this->multicurrency_code != $conf->currency) { ?>
+			<td class="linecoluht_currency right"><span id="title_up_ht_currency"><?php echo $langs->trans('PriceUHT').'&nbsp;<span class="opacitymedium">('.$langs->getCurrencySymbol($this->multicurrency_code).')</span>'; ?></span></td>
 		<?php } ?>
 		<?php if (!empty($inputalsopricewithtax) && !getDolGlobalInt('MAIN_NO_INPUT_PRICE_WITH_TAX')) { ?>
 			<td class="linecoluttc right"><span id="title_up_ttc"><?php echo $langs->trans('PriceUTTC'); ?></span></td>
+		<?php } ?>
+		<?php if (isModEnabled("multicurrency") && $this->multicurrency_code && $this->multicurrency_code != $conf->currency && !empty($inputalsopricewithtax) && !getDolGlobalInt('MAIN_NO_INPUT_PRICE_WITH_TAX')) { ?>
+			<td class="linecoluttc_currency right"><span id="title_up_ttc_currency"><?php echo $langs->trans('PriceUTTC').'&nbsp;<span class="opacitymedium">('.$langs->getCurrencySymbol($this->multicurrency_code).')</span>'; ?></td>
 		<?php } ?>
 		<td class="linecolqty right"><?php echo $langs->trans('Qty'); ?></td>
 		<?php
@@ -149,7 +165,7 @@ if ($nolinesbefore) {
 		<td class="linecoldiscount right"><?php echo $langs->trans('ReductionShort'); ?></td>
 		<?php
 		// Fields for situation invoice
-		if (isset($this->situation_cycle_ref) && $this->situation_cycle_ref) {
+		if (property_exists($this, 'situation_cycle_ref') && isset($this->situation_cycle_ref) && $this->situation_cycle_ref) {
 			print '<td class="linecolcycleref right">'.$langs->trans('Progress').'</td>';
 			if (getDolGlobalInt('INVOICE_USE_SITUATION') == 2) {
 				print '<td class="nobottom nowrap right"></td>';
@@ -209,14 +225,12 @@ if ($nolinesbefore) {
 			print '<span class="prod_entry_mode_free nowraponall">';
 			// Show radio for the non predefined product
 			if ($forceall >= 0 && (isModEnabled("product") || isModEnabled("service"))) {
-				print '<label for="prod_entry_mode_free">';
 				print '<input type="radio" class="prod_entry_mode_free" name="prod_entry_mode" id="prod_entry_mode_free" value="free"';
 				//echo (GETPOST('prod_entry_mode')=='free' ? ' checked' : ((empty($forceall) && (!isModEnabled('product') || !isModEnabled('service')))?' checked':'') );
 				print((GETPOST('prod_entry_mode', 'alpha') == 'free' || getDolGlobalString('MAIN_FREE_PRODUCT_CHECKED_BY_DEFAULT')) ? ' checked' : '');
 				print '> ';
 				// Show type selector
 				$labelforempty = $langs->trans("FreeLineOfType").'...';
-				print '</label>';
 			} else {
 				echo '<input type="hidden" id="prod_entry_mode_free" name="prod_entry_mode" value="free">';
 				// Show type selector
@@ -229,7 +243,17 @@ if ($nolinesbefore) {
 				}
 			}
 
+			if ($forceall >= 0 && (isModEnabled("product") || isModEnabled("service"))) {
+				print '<label for="prod_entry_mode_free">';
+			}
+
+			// Select type of line
 			$form->select_type_of_lines(GETPOSTISSET("type") ? GETPOST("type", 'alpha', 2) : -1, 'type', $labelforempty, 1, $forceall, 'minwidth200', 0);
+
+			if ($forceall >= 0 && (isModEnabled("product") || isModEnabled("service"))) {
+				print '</label>';
+			}
+
 			print '</span>';
 		}
 		// Predefined product/service
@@ -271,9 +295,9 @@ if ($nolinesbefore) {
 				}
 				if (getDolGlobalString('ENTREPOT_EXTRA_STATUS')) {
 					// hide products in closed warehouse, but show products for internal transfer
-					$form->select_produits(GETPOST('idprod'), 'idprod', $filtertype, getDolGlobalInt('PRODUIT_LIMIT_SIZE'), $buyer->price_level, $statustoshow, 2, '', 1, array(), $buyer->id, $labelforradio, 0, 'maxwidth500 widthcentpercentminusx', 0, $statuswarehouse, GETPOST('combinations', 'array'));
+					$form->select_produits(GETPOSTINT('idprod'), 'idprod', $filtertype, getDolGlobalInt('PRODUIT_LIMIT_SIZE'), $buyer->price_level, $statustoshow, 2, '', 1, array(), $buyer->id, $labelforradio, 0, 'maxwidth500 widthcentpercentminusx', 0, $statuswarehouse, GETPOST('combinations', 'array:alphanohtml'));
 				} else {
-					$form->select_produits(GETPOST('idprod'), 'idprod', $filtertype, getDolGlobalInt('PRODUIT_LIMIT_SIZE'), $buyer->price_level, $statustoshow, 2, '', 1, array(), $buyer->id, $labelforradio, 0, 'maxwidth500 widthcentpercentminusx', 0, '', GETPOST('combinations', 'array'));
+					$form->select_produits(GETPOSTINT('idprod'), 'idprod', $filtertype, getDolGlobalInt('PRODUIT_LIMIT_SIZE'), $buyer->price_level, $statustoshow, 2, '', 1, array(), $buyer->id, $labelforradio, 0, 'maxwidth500 widthcentpercentminusx', 0, '', GETPOST('combinations', 'array:alphanohtml'));
 				}
 				if (getDolGlobalString('MAIN_AUTO_OPEN_SELECT2_ON_FOCUS_FOR_CUSTOMER_PRODUCTS')) {
 					?>
@@ -351,9 +375,9 @@ if ($nolinesbefore) {
 						$newbutton = '<span class="fa fa-plus-circle valignmiddle paddingleft" title="'.$langs->trans("NewProduct").'"></span>';
 						if (getDolGlobalInt('MAIN_FEATURES_LEVEL') >= 2) {
 							// @FIXME Not working yet
-							$tmpbacktopagejsfields = 'addproduct:id,search_id';
+							$jsonclode = 'jsRefreshProductCombo';
 							// @phan-suppress-next-line PhanPluginSuspiciousParamOrder
-							print dolButtonToOpenUrlInDialogPopup('addproduct', $langs->transnoentitiesnoconv('AddProduct'), $newbutton, $url, '', '', $tmpbacktopagejsfields);
+							print dolButtonToOpenUrlInDialogPopup('addproduct', $langs->transnoentitiesnoconv('AddProduct'), $newbutton, $url, '', '', $jsonclode);
 						} else {
 							print '<a href="'.DOL_URL_ROOT.'/product/card.php?action=create&type=0&backtopage='.urlencode($_SERVER["PHP_SELF"].'?id='.$object->id).'" title="'.dol_escape_htmltag($langs->trans("NewProduct")).'"><span class="fa fa-plus-circle valignmiddle paddingleft"></span></a>';
 						}
@@ -363,9 +387,9 @@ if ($nolinesbefore) {
 						$newbutton = '<span class="fa fa-plus-circle valignmiddle paddingleft" title="'.$langs->trans("NewService").'"></span>';
 						if (getDolGlobalInt('MAIN_FEATURES_LEVEL') >= 2) {
 							// @FIXME Not working yet
-							$tmpbacktopagejsfields = 'addproduct:id,search_id';
+							$jsonclode = 'jsRefreshServiceCombo';
 							// @phan-suppress-next-line PhanPluginSuspiciousParamOrder
-							print dolButtonToOpenUrlInDialogPopup('addproduct', $langs->transnoentitiesnoconv('AddService'), $newbutton, $url, '', '', $tmpbacktopagejsfields);
+							print dolButtonToOpenUrlInDialogPopup('addproduct', $langs->transnoentitiesnoconv('AddService'), $newbutton, $url, '', '', $jsonclode);
 						} else {
 							print '<a href="'.DOL_URL_ROOT.'/product/card.php?action=create&type=1&backtopage='.urlencode($_SERVER["PHP_SELF"].'?id='.$object->id).'" title="'.dol_escape_htmltag($langs->trans("NewService")).'"><span class="fa fa-plus-circle valignmiddle paddingleft"></span></a>';
 						}
@@ -441,7 +465,7 @@ if ($nolinesbefore) {
 			echo '</div>';
 		}
 		if (is_object($objectline)) {
-			$temps = $objectline->showOptionals($extrafields, 'create', array(), '', '', 1, 'line');
+			$temps = $objectline->showOptionals($extrafields, 'create', array(), '', '', '1', 'line');
 
 			if (!empty($temps)) {
 				print '<div style="padding-top: 10px" id="extrafield_lines_area_create" name="extrafield_lines_area_create">';
@@ -457,6 +481,7 @@ if ($nolinesbefore) {
 		}
 		print '<td class="nobottom linecolvat right">';
 		$coldisplay++;
+		$type_tva = 0;
 		if ($object->element == 'propal' || $object->element == 'commande' || $object->element == 'facture' || $object->element == 'facturerec') {
 			$type_tva = 1;
 		} elseif ($object->element == 'supplier_proposal' || $object->element == 'order_supplier' || $object->element == 'invoice_supplier' || $object->element == 'invoice_supplier_rec') {
@@ -475,7 +500,7 @@ if ($nolinesbefore) {
 	</td>
 
 	<?php
-	if (isModEnabled("multicurrency") && $this->multicurrency_code != $conf->currency) {
+	if (isModEnabled("multicurrency") && $this->multicurrency_code && $this->multicurrency_code != $conf->currency) {
 		$coldisplay++; ?>
 		<td class="nobottom linecoluht_currency right">
 			<input type="text" name="multicurrency_price_ht" id="multicurrency_price_ht" class="flat right width50" value="<?php echo(GETPOSTISSET("multicurrency_price_ht") ? GETPOST("multicurrency_price_ht", 'alpha', 2) : ''); ?>">
@@ -487,7 +512,14 @@ if ($nolinesbefore) {
 		<td class="nobottom linecoluttc right">
 			<input type="text" name="price_ttc" id="price_ttc" class="flat right width50" value="<?php echo(GETPOSTISSET("price_ttc") ? GETPOST("price_ttc", 'alpha', 2) : ''); ?>">
 		</td>
-			<?php
+					<?php
+	}
+	if (isModEnabled("multicurrency") && $this->multicurrency_code && $this->multicurrency_code != $conf->currency && !empty($inputalsopricewithtax) && !getDolGlobalInt('MAIN_NO_INPUT_PRICE_WITH_TAX')) {
+		$coldisplay++; ?>
+		<td class="nobottom linecoluttc_currency right">
+			<input type="text" name="multicurrency_price_ttc" id="multicurrency_price_ttc" class="flat right width50" value="<?php echo(GETPOSTISSET("multicurrency_price_ttc") ? GETPOST("multicurrency_price_ttc", 'alpha', 2) : ''); ?>">
+		</td>
+					<?php
 	}
 	$coldisplay++;
 	?>
@@ -526,21 +558,21 @@ if ($nolinesbefore) {
 			$coldisplay++; ?>
 			<td class="nobottom margininfos linecolmargin right">
 				<!-- For predef product -->
-					<?php if (isModEnabled("product") || isModEnabled("service")) { ?>
+						<?php if (isModEnabled("product") || isModEnabled("service")) { ?>
 					<select id="fournprice_predef" name="fournprice_predef" class="flat minwidth75imp maxwidth150" style="display: none;"></select>
-					<?php } ?>
+						<?php } ?>
 				<!-- For free product -->
 				<input type="text" id="buying_price" name="buying_price" class="flat maxwidth75 right" value="<?php echo(GETPOSTISSET("buying_price") ? GETPOST("buying_price", 'alpha', 2) : ''); ?>">
 			</td>
-				<?php
-				if (getDolGlobalString('DISPLAY_MARGIN_RATES')) {
-					echo '<td class="nobottom nowraponall margininfos right"><input class="flat right width40" type="text" id="np_marginRate" name="np_marginRate" value="'.(GETPOSTISSET("np_marginRate") ? GETPOST("np_marginRate", 'alpha', 2) : '').'"><span class="np_marginRate opacitymedium hideonsmartphone">%</span></td>';
-					$coldisplay++;
-				}
-				if (getDolGlobalString('DISPLAY_MARK_RATES')) {
-					echo '<td class="nobottom nowraponall margininfos right"><input class="flat right width40" type="text" id="np_markRate" name="np_markRate" value="'.(GETPOSTISSET("np_markRate") ? GETPOST("np_markRate", 'alpha', 2) : '').'"><span class="np_markRate opacitymedium hideonsmartphone">%</span></td>';
-					$coldisplay++;
-				}
+						<?php
+						if (getDolGlobalString('DISPLAY_MARGIN_RATES')) {
+							echo '<td class="nobottom nowraponall margininfos right"><input class="flat right width40" type="text" id="np_marginRate" name="np_marginRate" value="'.(GETPOSTISSET("np_marginRate") ? GETPOST("np_marginRate", 'alpha', 2) : '').'"><span class="np_marginRate opacitymedium hideonsmartphone">%</span></td>';
+							$coldisplay++;
+						}
+						if (getDolGlobalString('DISPLAY_MARK_RATES')) {
+									echo '<td class="nobottom nowraponall margininfos right"><input class="flat right width40" type="text" id="np_markRate" name="np_markRate" value="'.(GETPOSTISSET("np_markRate") ? GETPOST("np_markRate", 'alpha', 2) : '').'"><span class="np_markRate opacitymedium hideonsmartphone">%</span></td>';
+									$coldisplay++;
+						}
 		}
 	}
 	$coldisplay += $colspan;
@@ -561,6 +593,8 @@ if ((isModEnabled("service") || ($object->element == 'contrat')) && $dateSelecto
 	$date_end = dol_mktime(GETPOSTINT('date_starthour'), GETPOSTINT('date_startmin'), 0, GETPOSTINT('date_endmonth'), GETPOSTINT('date_endday'), GETPOSTINT('date_endyear'));
 
 	$prefillDates = false;
+	$date_start_prefill = 0;
+	$date_end_prefill = 0;
 
 	if (getDolGlobalString('MAIN_FILL_SERVICE_DATES_FROM_LAST_SERVICE_LINE') && !empty($object->lines)) {
 		for ($i = count($object->lines) - 1; $i >= 0; $i--) {
@@ -583,9 +617,9 @@ if ((isModEnabled("service") || ($object->element == 'contrat')) && $dateSelecto
 		print $form->selectDate($date_end, "date_end", $usehm, $usehm, 1, "addproduct");
 	} else {
 		print $langs->trans('ServiceLimitedDuration').' '.$langs->trans('From').' ';
-		print $form->selectDate($date_start, 'date_start', !getDolGlobalString('MAIN_USE_HOURMIN_IN_DATE_RANGE') ? 0 : 1, !getDolGlobalString('MAIN_USE_HOURMIN_IN_DATE_RANGE') ? 0 : 1, 1, "addproduct", 1, 0);
+		print $form->selectDate($date_start, 'date_start', getDolGlobalInt('MAIN_USE_HOURMIN_IN_DATE_RANGE'), getDolGlobalInt('MAIN_USE_HOURMIN_IN_DATE_RANGE'), 1, "addproduct", 1, 0);
 		print ' '.$langs->trans('to').' ';
-		print $form->selectDate($date_end, 'date_end', !getDolGlobalString('MAIN_USE_HOURMIN_IN_DATE_RANGE') ? 0 : 1, !getDolGlobalString('MAIN_USE_HOURMIN_IN_DATE_RANGE') ? 0 : 1, 1, "addproduct", 1, 0);
+		print $form->selectDate($date_end, 'date_end', getDolGlobalInt('MAIN_USE_HOURMIN_IN_DATE_RANGE'), getDolGlobalInt('MAIN_USE_HOURMIN_IN_DATE_RANGE'), 1, "addproduct", 1, 0);
 	}
 
 	if ($prefillDates) {
@@ -613,18 +647,18 @@ if ((isModEnabled("service") || ($object->element == 'contrat')) && $dateSelecto
 	}
 
 	if (!$date_start) {
-		if (isset($conf->global->MAIN_DEFAULT_DATE_START_HOUR)) {
+		if (getDolGlobalString('MAIN_DEFAULT_DATE_START_HOUR') != '') {
 			print 'jQuery("#date_starthour").val("' . getDolGlobalString('MAIN_DEFAULT_DATE_START_HOUR').'");';
 		}
-		if (isset($conf->global->MAIN_DEFAULT_DATE_START_MIN)) {
+		if (getDolGlobalString('MAIN_DEFAULT_DATE_START_MIN') != '') {
 			print 'jQuery("#date_startmin").val("' . getDolGlobalString('MAIN_DEFAULT_DATE_START_MIN').'");';
 		}
 	}
 	if (!$date_end) {
-		if (isset($conf->global->MAIN_DEFAULT_DATE_END_HOUR)) {
+		if (getDolGlobalString('MAIN_DEFAULT_DATE_END_HOUR')) {
 			print 'jQuery("#date_endhour").val("' . getDolGlobalString('MAIN_DEFAULT_DATE_END_HOUR').'");';
 		}
-		if (isset($conf->global->MAIN_DEFAULT_DATE_END_MIN)) {
+		if (getDolGlobalString('MAIN_DEFAULT_DATE_END_MIN')) {
 			print 'jQuery("#date_endmin").val("' . getDolGlobalString('MAIN_DEFAULT_DATE_END_MIN').'");';
 		}
 	}
@@ -643,14 +677,14 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 	<?php
 	if (getDolGlobalString('DISPLAY_MARGIN_RATES')) { ?>
 		$("input[name='np_marginRate']:first").blur(function(e) {
-			console.log("np_marginRate blur");
+			console.log("np_marginRate blur, call checkFreeLine");
 			return checkFreeLine(e, "np_marginRate");
 		});
 		<?php
 	}
 	if (getDolGlobalString('DISPLAY_MARK_RATES')) { ?>
 		$("input[name='np_markRate']:first").blur(function(e) {
-			console.log("np_markRate blur");
+			console.log("np_markRate blur, call checkFreeLine");
 			return checkFreeLine(e, "np_markRate");
 		});
 		<?php
@@ -667,15 +701,13 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 		if (rate.val() == '')
 			return true;
 
-		if (! $.isNumeric(rate.val().replace(',','.')))
-		{
+		if (! $.isNumeric(rate.val().replace(',','.')))	{		// TODO Use price2numjs ?
 			alert('<?php echo dol_escape_js($langs->trans("rateMustBeNumeric")); ?>');
 			e.stopPropagation();
 			setTimeout(function () { rate.focus() }, 50);
 			return false;
 		}
-		if (npRate == "np_markRate" && rate.val() >= 100)
-		{
+		if (npRate == "np_markRate" && rate.val() >= 100) {		// TODO Use price2numjs ?
 			alert('<?php echo dol_escape_js($langs->trans("markRateShouldBeLesserThan100")); ?>');
 			e.stopPropagation();
 			setTimeout(function () { rate.focus() }, 50);
@@ -683,14 +715,15 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 		}
 
 		var price = 0;
-		remisejs=price2numjs(remise.val());
+		remisejs = price2numjs(remise.val());
 
-		if (remisejs != 100)	// If a discount not 100 or no discount
-		{
-			if (remisejs == '') remisejs=0;
+		if (remisejs != 100) {	// If there is a discount that is not 100 or if no discount at all (most common case)
+			if (remisejs == '') {
+				remisejs=0;
+			}
 
-			bpjs=price2numjs(buying_price.val());
-			ratejs=price2numjs(rate.val());
+			bpjs = price2numjs(buying_price.val());
+			ratejs = price2numjs(rate.val());
 
 			if (npRate == "np_marginRate")
 				price = ((bpjs * (1 + ratejs / 100)) / (1 - remisejs / 100));
@@ -698,7 +731,8 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 				price = ((bpjs / (1 - ratejs / 100)) / (1 - remisejs / 100));
 		}
 
-		$("input[name='price_ht']:first").val(price);	// TODO Must use a function like php price to have here a formatted value
+		// $("input[name='price_ht']:first").val(price);	// TODO Must use a function like php price to have here a formatted value
+		$("input[name='price_ht']:first").val(pricejs(price));
 
 		return true;
 	}
@@ -730,6 +764,7 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 				jQuery("#price_ttc").val('');
 				jQuery("#multicurrency_subprice").val('');
 				jQuery("#multicurrency_price_ht").val('');
+				jQuery("#multicurrency_price_ttc").val('');
 			}
 		});
 
@@ -739,6 +774,7 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 				jQuery("#price_ht").val('');
 				jQuery("#multicurrency_subprice").val('');
 				jQuery("#multicurrency_price_ht").val('');
+				jQuery("#multicurrency_price_ttc").val('');
 			}
 		});
 		jQuery("#multicurrency_subprice").keyup(function(event) {
@@ -746,6 +782,7 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 			if (event.which != 9 && (event.which < 37 || event.which > 40) && jQuery("#multicurrency_subprice").val() != '') {
 				jQuery("#price_ht").val('');
 				jQuery("#price_ttc").val('');
+				jQuery("#multicurrency_price_ttc").val('');
 			}
 		});
 		jQuery("#multicurrency_price_ht").keyup(function(event) {
@@ -753,6 +790,15 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 			if (event.which != 9 && (event.which < 37 || event.which > 40) && jQuery("#multicurrency_price_ht").val() != '') {
 				jQuery("#price_ht").val('');
 				jQuery("#price_ttc").val('');
+				jQuery("#multicurrency_price_ttc").val('');
+			}
+		});
+		jQuery("#multicurrency_price_ttc").keyup(function(event) {
+			// console.log(event.which);		// discard event tag and arrows
+			if (event.which != 9 && (event.which < 37 || event.which > 40) && jQuery("#multicurrency_price_ttc").val() != '') {
+				jQuery("#price_ht").val('');
+				jQuery("#price_ttc").val('');
+				jQuery("#multicurrency_price_ht").val('');
 			}
 		});
 
@@ -773,11 +819,11 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 			}
 
 			if (jQuery("#select_type").val() != '-1') {
-				console.log("we remove class");
+				console.log("we remove class placeholder");
 				jQuery("#select_type").removeClass("placeholder");
 				setFocusOnDescription();
 			} else {
-				console.log("we add class");
+				console.log("we add class placeholder");
 				jQuery("#select_type").addClass("placeholder");
 			}
 		});
@@ -795,9 +841,12 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 
 		<?php
 		if (!$freelines) { ?>
+			console.log("emulate click on prod_entry_mode_predef");
 			jQuery("#prod_entry_mode_predef").click();
 			<?php
-		} else { ?>
+		} elseif (!GETPOSTISSET("type")) { // If not a type selected from previous page
+			?>
+			console.log("add class placeholder");
 			jQuery("#select_type").addClass("placeholder");
 			<?php
 		}
@@ -851,6 +900,11 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 							$('#date_end').removeAttr('type');
 							$('#date_start').attr('type', data.type);
 							$('#date_end').attr('type', data.type);
+
+							if(<?php echo getDolGlobalInt('PRODUCT_USE_UNITS'); ?>) {
+								console.log("objectline_create.tpl set content of units");
+								jQuery("#units").val(data.default_unit).change();
+							}
 
 							$('#date_start').removeAttr('mandatoryperiod');
 							$('#date_end').removeAttr('mandatoryperiod');
@@ -920,27 +974,36 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 									<?php
 								} ?>
 							}
-							// Set vat rate if field is an input box
-							$('#tva_tx').val(tva_tx);
-							// Set vat rate by selecting the combo
-							//$('#tva_tx option').val(tva_tx);	// This is bugged, it replaces the vat key of all options
-							$('#tva_tx option').removeAttr('selected');
-							console.log("stringforvatrateselection="+stringforvatrateselection+" -> value of option label for this key="+$('#tva_tx option[value="'+stringforvatrateselection+'"]').val());
-							$('#tva_tx option[value="'+stringforvatrateselection+'"]').prop('selected', true);
+							// Set vat rate: handle both input box and combo cases
+							if ($('#tva_tx option').length) {
+								// It is a combo: try exact match first (rate + code), fallback to numeric match
+								if ($('#tva_tx option[value="' + stringforvatrateselection + '"]').length) {
+									$('#tva_tx').val(stringforvatrateselection);
+								} else {
+									$('#tva_tx option').filter(function () {
+										return parseFloat($(this).val()) === parseFloat(tva_tx);
+									}).first().prop('selected', true);
+								}
+							} else {
+								// It is an input box
+								$('#tva_tx').val(tva_tx);
+							}
 
 							// Sync the measuring unit dropdown with the product's default fk_unit
-							// (issue #34610). Without this the dropdown keeps the static initial
+							// (issue #34610). Without this, the dropdown keeps the static initial
 							// value (the first c_units row, typically "Kg") regardless of what
 							// the selected product is configured with.
 							if (typeof data.fk_unit != 'undefined' && data.fk_unit != null && $("#units").length) {
 								$("#units").val(data.fk_unit).trigger('change');
+							} else if (typeof data.default_unit != 'undefined' && data.default_unit != null && $("#units").length) {
+								$("#units").val(data.default_unit).trigger('change');
 							}
 
 								<?php
 								if (getDolGlobalInt('PRODUIT_AUTOFILL_DESC') == 1) {
 									if (getDolGlobalInt('MAIN_MULTILANGS') && getDolGlobalString('PRODUIT_TEXTS_IN_THIRDPARTY_LANGUAGE')) { ?>
 							var proddesc = data.desc_trans;
-										<?php
+																						<?php
 									} else { ?>
 							var proddesc = data.desc;
 										<?php
@@ -955,7 +1018,7 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 									editor.setData(proddesc);
 								}
 							}
-										<?php
+																						<?php
 									} else { ?>
 							jQuery('#dp_desc').text(proddesc);
 										<?php
@@ -967,13 +1030,13 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 								jQuery.each(data.array_options, function( key, value ) {
 									jQuery('div[class*="det'+key.replace('options_','_extras_')+'"] > #'+key).val(value);
 								});
-									<?php
+																									<?php
 								} ?>
 						},
 						'json'
 					);
 				}
-					<?php
+							<?php
 			}
 
 			if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
@@ -1078,6 +1141,23 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 								$('#buying_price').hide();
 							}
 						});
+
+						<?php if (getDolGlobalString('PRODUCT_USE_UNITS')) { ?>
+						// Sync the measuring unit dropdown with the product's default fk_unit
+						// for the supplier-side line picker (issue #38636), mirroring the
+						// customer-side behaviour from issue #34610. Look at the first
+						// non-pmp/non-cost row of the AJAX response (all rows for a given
+						// product carry the same fk_unit since it comes from llx_product).
+						var firstFkUnit = null;
+						$(data).each(function() {
+							if (this.id != 'pmpprice' && this.id != 'costprice' && typeof this.fk_unit != 'undefined' && this.fk_unit != null && firstFkUnit === null) {
+								firstFkUnit = this.fk_unit;
+							}
+						});
+						if (firstFkUnit !== null && $("#units").length) {
+							$("#units").val(firstFkUnit).trigger('change');
+						}
+						<?php } ?>
 					}
 				},
 				'json');
@@ -1123,7 +1203,8 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 
 
 			// Deal with supplier ref price (idprodfournprice = int)
-			if (jQuery('#idprodfournprice').val() > 0)
+			var supplierVal = jQuery('#idprodfournprice').val();
+			if (supplierVal && supplierVal !== '-1' && (supplierVal > 0 || supplierVal.indexOf('idprod_') === 0))
 			{
 				console.log("objectline_create.tpl #idprodfournprice is an ID > 0, so we set some properties into page");
 
@@ -1186,9 +1267,13 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 
 				if (has_multicurrency_up === false) {
 					if (typeof up_locale === 'undefined') {
-						jQuery("#price_ht").val(up);
+						if (!Number.isNaN(up)) {
+							jQuery("#price_ht").val(up);
+						}
 					} else {
-						jQuery("#price_ht").val(up_locale);
+						if (!Number.isNaN(up_locale)) {
+							jQuery("#price_ht").val(up_locale);
+						}
 					}
 				}
 
@@ -1355,7 +1440,7 @@ if (!empty($usemargins) && $user->hasRight('margins', 'creer')) {
 		<?php if (!getDolGlobalString('DISPLAY_MARK_RATES')) { ?>
 			jQuery("#np_markRate, .np_markRate").hide();
 		<?php } ?>
-		jQuery("#units, #title_units").hide();
+		jQuery("#units, #title_units, .linecoluseunit .selection").hide();
 		jQuery("#buying_price").show();
 		jQuery('#trlinefordates, .divlinefordates').show();
 	}

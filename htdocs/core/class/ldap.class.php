@@ -24,6 +24,7 @@
 
 /**
  *	\file 		htdocs/core/class/ldap.class.php
+ *  \ingroup	ldap
  *	\brief 		File of class to manage LDAP features
  *
  *  Note:
@@ -311,7 +312,6 @@ class Ldap
 	 * Use this->server, this->serverPort, this->ldapProtocolVersion, this->serverType, this->searchUser, this->searchPassword
 	 * After return, this->connection and $this->bind are defined
 	 *
-	 * @see connect_bind renamed
 	 * @return		int		if KO: <0 || if bind anonymous: 1 || if bind auth: 2
 	 */
 	public function connectBind()
@@ -837,7 +837,6 @@ class Ldap
 	/**
 	 * Build an LDAP message
 	 *
-	 * @see dump_content renamed
 	 * @param	string		$dn			DN entry key
 	 * @param	array<string,string[]>	$info	Attributes array
 	 * @return	string					Content of file
@@ -1108,6 +1107,13 @@ class Ldap
 			return -3;
 		}
 
+		// Honor the admin-configured user search filter (LDAP_FILTER_CONNECTION)
+		// so an identifier match outside the configured scope does not leak
+		// attributes for an unrelated LDAP user (see #37120).
+		if (!empty($this->filter) && !preg_match('/^\s*\(\s*&\s*\(/', $filter)) {
+			$filter = '(&(' . $this->filter . ')' . $filter . ')';
+		}
+
 		$search = @ldap_search($this->connection, $dn, $filter);
 
 		// Only one entry should ever be returned
@@ -1360,8 +1366,8 @@ class Ldap
 	 * 	Do not use for search of a given properties list because of upper-lower case conflict.
 	 *	Only use for pages.
 	 *	'Fiche LDAP' shows readable fields by default.
-	 * 	@see bind
-	 * 	@see bindauth
+	 * 	@see bind()
+	 * 	@see bindauth()
 	 *
 	 * 	@param	string		$checkDn		Search DN (Ex: ou=users,cn=my-domain,cn=com)
 	 * 	@param 	string		$filter			Search filter (ex: (sn=name_person) )

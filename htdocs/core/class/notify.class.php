@@ -8,7 +8,7 @@
  * Copyright (C) 2023      William Mead         <william.mead@manchenumerique.fr>
  * Copyright (C) 2024      Jon Bendtsen         <jon.bendtsen.github@jonb.dk>
  * Copyright (C) 2024		MDW						<mdeweerd@users.noreply.github.com>
- * Copyright (C) 2024		Frédéric France			<frederic.france@free.fr>
+ * Copyright (C) 2024-2025  Frédéric France			<frederic.france@free.fr>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,7 +78,7 @@ class Notify
 	public $contact_id;
 
 	/**
-	 * @var string fk_user
+	 * @var int fk_user
 	 */
 	public $fk_user;
 
@@ -799,13 +799,13 @@ class Notify
 								break;
 							case 'PROPAL_VALIDATE':
 								$link = '<a href="'.$urlwithroot.'/comm/propal/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-								$dir_output = $conf->propal->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
+								$dir_output = $conf->propal->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
 								$object_type = 'propal';
 								$mesg = $outputlangs->transnoentitiesnoconv("EMailTextProposalValidated", $link);
 								break;
 							case 'PROPAL_CLOSE_REFUSED':
 								$link = '<a href="'.$urlwithroot.'/comm/propal/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-								$dir_output = $conf->propal->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
+								$dir_output = $conf->propal->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
 								$object_type = 'propal';
 								$labeltouse = getDolGlobalString('PROPAL_CLOSE_REFUSED_TEMPLATE');
 								$mesg = $outputlangs->transnoentitiesnoconv("EMailTextProposalClosedRefused", $link);
@@ -815,7 +815,7 @@ class Notify
 								break;
 							case 'PROPAL_CLOSE_SIGNED':
 								$link = '<a href="'.$urlwithroot.'/comm/propal/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-								$dir_output = $conf->propal->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
+								$dir_output = $conf->propal->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
 								$object_type = 'propal';
 								$mesg = $outputlangs->transnoentitiesnoconv("EMailTextProposalClosedSigned", $link);
 								if (!empty($object->context['closedfromonlinesignature'])) {
@@ -849,16 +849,16 @@ class Notify
 								break;
 							case 'ORDER_SUPPLIER_VALIDATE':
 								$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 								$object_type = 'order_supplier';
-								$labeltouse = isset($conf->global->ORDER_SUPPLIER_VALIDATE_TEMPLATE) ? $conf->global->ORDER_SUPPLIER_VALIDATE_TEMPLATE : '';
+								$labeltouse = getDolGlobalString('ORDER_SUPPLIER_VALIDATE_TEMPLATE');
 								$mesg = $outputlangs->transnoentitiesnoconv("Hello").",\n\n";
 								$mesg .= $outputlangs->transnoentitiesnoconv("EMailTextSupplierOrderValidatedBy", $link, $user->getFullName($outputlangs));
 								$mesg .= "\n\n".$outputlangs->transnoentitiesnoconv("Sincerely").".\n\n";
 								break;
 							case 'ORDER_SUPPLIER_CANCEL':
 								$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 								$object_type = 'order_supplier';
 								$mesg = $outputlangs->transnoentitiesnoconv("Hello").",\n\n";
 								$mesg .= $outputlangs->transnoentitiesnoconv("EMailTextSupplierOrderCanceledBy", $link, $user->getFullName($outputlangs));
@@ -866,16 +866,16 @@ class Notify
 								break;
 							case 'ORDER_SUPPLIER_APPROVE':
 								$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 								$object_type = 'order_supplier';
-								$labeltouse = isset($conf->global->ORDER_SUPPLIER_APPROVE_TEMPLATE) ? $conf->global->ORDER_SUPPLIER_APPROVE_TEMPLATE : '';
+								$labeltouse = getDolGlobalString('ORDER_SUPPLIER_APPROVE_TEMPLATE');
 								$mesg = $outputlangs->transnoentitiesnoconv("Hello").",\n\n";
 								$mesg .= $outputlangs->transnoentitiesnoconv("EMailTextSupplierOrderApprovedBy", $link, $user->getFullName($outputlangs));
 								$mesg .= "\n\n".$outputlangs->transnoentitiesnoconv("Sincerely").".\n\n";
 								break;
 							case 'ORDER_SUPPLIER_SUBMIT':
 								$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 								$object_type = 'order_supplier';
 								$mesg = $outputlangs->transnoentitiesnoconv("Hello").",\n\n";
 								$mesg .= $outputlangs->transnoentitiesnoconv("EMailTextSupplierOrderSubmittedBy", $link, $user->getFullName($outputlangs));
@@ -883,9 +883,9 @@ class Notify
 								break;
 							case 'ORDER_SUPPLIER_REFUSE':
 								$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+								$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 								$object_type = 'order_supplier';
-								$labeltouse = isset($conf->global->ORDER_SUPPLIER_REFUSE_TEMPLATE) ? $conf->global->ORDER_SUPPLIER_REFUSE_TEMPLATE : '';
+								$labeltouse = getDolGlobalString('ORDER_SUPPLIER_REFUSE_TEMPLATE');
 								$mesg = $outputlangs->transnoentitiesnoconv("Hello").",\n\n";
 								$mesg .= $outputlangs->transnoentitiesnoconv("EMailTextSupplierOrderRefusedBy", $link, $user->getFullName($outputlangs));
 								$mesg .= "\n\n".$outputlangs->transnoentitiesnoconv("Sincerely").".\n\n";
@@ -955,7 +955,7 @@ class Notify
 						$template = $notifcode.'_TEMPLATE';
 						$labeltouse = getDolGlobalString($template);
 						if (!empty($labeltouse)) {
-							$arraydefaultmessage = $formmail->getEMailTemplate($this->db, $object_type.'_send', $user, $outputlangs, 0, 1, $labeltouse);
+							$arraydefaultmessage = $formmail->getEMailTemplate($this->db, $object_type, $user, $outputlangs, 0, 1, $labeltouse);
 						}
 						if (!empty($labeltouse) && is_object($arraydefaultmessage) && $arraydefaultmessage->id > 0) {
 							if (method_exists($object, 'fetch_thirdparty') && empty($object->thirdparty)) {
@@ -1080,7 +1080,7 @@ class Notify
 		}
 
 		// Check notification using fixed email
-		// TODO Move vars NOTIFICATION_FIXEDEMAIL into table llx_notify_def and inclulde the case into previous loop of sql result
+		// TODO Move vars NOTIFICATION_FIXEDEMAIL into table llx_notify_def and include the case into previous loop of sql result
 		if (!$error) {
 			foreach ($conf->global as $key => $val) {
 				$reg = array();
@@ -1137,13 +1137,13 @@ class Notify
 						break;
 					case 'PROPAL_VALIDATE':
 						$link = '<a href="'.$urlwithroot.'/comm/propal/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-						$dir_output = $conf->propal->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
+						$dir_output = $conf->propal->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
 						$object_type = 'propal';
 						$mesg = $langs->transnoentitiesnoconv("EMailTextProposalValidated", $link);
 						break;
 					case 'PROPAL_CLOSE_SIGNED':
 						$link = '<a href="'.$urlwithroot.'/comm/propal/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-						$dir_output = $conf->propal->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
+						$dir_output = $conf->propal->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object, 'propal');
 						$object_type = 'propal';
 						$mesg = $langs->transnoentitiesnoconv("EMailTextProposalClosedSigned", $link);
 						break;
@@ -1174,7 +1174,7 @@ class Notify
 						break;
 					case 'ORDER_SUPPLIER_CANCEL':
 						$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 						$object_type = 'order_supplier';
 						$mesg = $langs->transnoentitiesnoconv("Hello").",\n\n";
 						$mesg .= $langs->transnoentitiesnoconv("EMailTextSupplierOrderCanceledBy", $link, $user->getFullName($langs));
@@ -1182,7 +1182,7 @@ class Notify
 						break;
 					case 'ORDER_SUPPLIER_VALIDATE':
 						$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 						$object_type = 'order_supplier';
 						$mesg = $langs->transnoentitiesnoconv("Hello").",\n\n";
 						$mesg .= $langs->transnoentitiesnoconv("EMailTextSupplierOrderValidatedBy", $link, $user->getFullName($langs));
@@ -1190,7 +1190,7 @@ class Notify
 						break;
 					case 'ORDER_SUPPLIER_APPROVE':
 						$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 						$object_type = 'order_supplier';
 						$mesg = $langs->transnoentitiesnoconv("Hello").",\n\n";
 						$mesg .= $langs->transnoentitiesnoconv("EMailTextSupplierOrderApprovedBy", $link, $user->getFullName($langs));
@@ -1198,7 +1198,7 @@ class Notify
 						break;
 					case 'ORDER_SUPPLIER_SUBMIT':
 						$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 						$object_type = 'order_supplier';
 						$mesg = $langs->transnoentitiesnoconv("Hello").",\n\n";
 						$mesg .= $langs->transnoentitiesnoconv("EMailTextSupplierOrderSubmittedBy", $link, $user->getFullName($langs));
@@ -1206,7 +1206,7 @@ class Notify
 						break;
 					case 'ORDER_SUPPLIER_REFUSE':
 						$link = '<a href="'.$urlwithroot.'/fourn/commande/card.php?id='.$object->id.'&entity='.$object->entity.'">'.$newref.'</a>';
-						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity]."/".get_exdir(0, 0, 0, 1, $object);
+						$dir_output = $conf->fournisseur->commande->multidir_output[$object->entity ?? $conf->entity]."/".get_exdir(0, 0, 0, 1, $object);
 						$object_type = 'order_supplier';
 						$mesg = $langs->transnoentitiesnoconv("Hello").",\n\n";
 						$mesg .= $langs->transnoentitiesnoconv("EMailTextSupplierOrderRefusedBy", $link, $user->getFullName($langs));
@@ -1269,7 +1269,7 @@ class Notify
 						break;
 				}
 				$ref = dol_sanitizeFileName($newref);
-				$pdf_path = $dir_output."/".$ref."/".$ref.".pdf";
+				$pdf_path = $dir_output."/".$ref.".pdf";
 				if (!dol_is_file($pdf_path)) {
 					// We can't add PDF as it is not generated yet.
 					$filepdf = '';
@@ -1290,7 +1290,7 @@ class Notify
 				if (!empty($mailTemplateLabel)) {
 					include_once DOL_DOCUMENT_ROOT.'/core/class/html.formmail.class.php';
 					$formmail = new FormMail($this->db);
-					$emailTemplate = $formmail->getEMailTemplate($this->db, $object_type.'_send', $user, $outputlangs, 0, 1, $mailTemplateLabel);
+					$emailTemplate = $formmail->getEMailTemplate($this->db, $object_type, $user, $outputlangs, 0, 1, $mailTemplateLabel);
 				}
 				if (!empty($mailTemplateLabel) && is_object($emailTemplate) && $emailTemplate->id > 0) {
 					if (property_exists($object, 'thirdparty')) {

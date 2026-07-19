@@ -2,7 +2,7 @@
 /* Copyright (C) 2003      Rodolphe Quiedeville <rodolphe@quiedeville.org>
  * Copyright (C) 2004-2013 Laurent Destailleur  <eldy@users.sourceforge.net>
  * Copyright (C) 2005-2009 Regis Houssin        <regis.houssin@inodbox.com>
- * Copyright (C) 2015      Frederic France      <frederic.france@free.fr>
+ * Copyright (C) 2015-2025  Frédéric France      <frederic.france@free.fr>
  * Copyright (C) 2024		MDW							<mdeweerd@users.noreply.github.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -35,7 +35,7 @@ class box_factures_fourn extends ModeleBoxes
 	public $boxcode = "lastsupplierbills";
 	public $boximg = "object_bill";
 	public $boxlabel = "BoxLastSupplierBills";
-	public $depends = array("facture", "fournisseur");
+	public $depends = array("invoice", "fournisseur");
 
 	/**
 	 *  Constructor

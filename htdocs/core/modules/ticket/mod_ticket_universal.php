@@ -77,7 +77,10 @@ class mod_ticket_universal extends ModeleNumRefTicket
 		$text .= '<table class="nobordernopadding" width="100%">';
 
 		$tooltip = $langs->trans("GenericMaskCodes", $langs->transnoentities("Ticket"), $langs->transnoentities("Ticket"));
+		$tooltip .= $langs->trans("GenericMaskCodes1");
+		$tooltip .= '<br>';
 		$tooltip .= $langs->trans("GenericMaskCodes2");
+		$tooltip .= '<br>';
 		$tooltip .= $langs->trans("GenericMaskCodes3");
 		$tooltip .= $langs->trans("GenericMaskCodes4a", $langs->transnoentities("Ticket"), $langs->transnoentities("Ticket"));
 		$tooltip .= $langs->trans("GenericMaskCodes5");
@@ -148,7 +151,7 @@ class mod_ticket_universal extends ModeleNumRefTicket
 		$entity = getEntity('ticketnumber', 1, $ticket);
 
 		$date = empty($ticket->datec) ? dol_now() : $ticket->datec;
-		$numFinal = get_next_value($db, $mask, 'ticket', 'ref', '', $objsoc->code_client, $date, 'next', false, null, $entity);
+		$numFinal = get_next_value($db, $mask, 'ticket', 'ref', '', (is_object($objsoc) ? $objsoc->code_client : ''), $date, 'next', false, null, $entity);
 
 		return $numFinal;
 	}
